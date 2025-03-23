@@ -1,4 +1,9 @@
 #include "systemcalls.h"
+#include <unistd.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -17,7 +22,8 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+	int ret = system(cmd);
+    return (!ret?true:false);
 }
 
 /**
@@ -58,8 +64,29 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+	pid_t pid = fork();
+	if(pid < 0) {
+		perror("fork command failed execution!");
+		return false;
+	}
+	if(pid == 0){ 
+		if(execv(command[0], command) < 0 ) {
+			perror("Execution failed returning!");
+			exit(1);
+		}
+	} else {
+		int status = 2;
+		if (wait(&status) < 0) {
+			perror("waitpid had failed!");
+			return false;
+		}
+		if(WIFEXITED(status)){
+			int exit_stat = WEXITSTATUS(status);
+			if(exit_stat == 1) return false;
 
-    va_end(args);
+		}
+    	va_end(args);
+	}
 
     return true;
 }
@@ -92,8 +119,48 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+	int fd = open(outputfile, O_WRONLY|O_CREAT|O_TRUNC, 0644);
+	if(fd < 0) {
+		perror("open failed execution!");
+    	va_end(args);
+		return false;
+	}
+	pid_t pid = fork();
+	if(pid < 0) {
+		perror("fork command failed execution!");
+		close(fd);
+    	va_end(args);
+		return false;
+	}
+	if(pid == 0){ 
+		if(dup2(fd, 1) < 0) {
+			perror("dup2 failed execution!");
+			return false;
+		}
+		if(execv(command[0], command) < 0 ) {
+			perror("Execution failed returning!");
+			exit(1);
+		}
+		exit(0);
+	} else {
+		int status = 2;
+		if (wait(&status) < 0) {
+			perror("waitpid had failed!");
+			close(fd);
+    		va_end(args);
+			return false;
+		}
+		if(WIFEXITED(status)){
+			int exit_stat = WEXITSTATUS(status);
+			if(exit_stat == 1) {
+				close(fd);
+    			va_end(args);
+				return false;
+			}
 
-    va_end(args);
-
+		}
+   		va_end(args);
+		close(fd);
+	}
     return true;
 }
