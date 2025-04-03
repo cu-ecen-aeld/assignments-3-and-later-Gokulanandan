@@ -12,7 +12,6 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
-CURRENT_DIR=$(pwd)
 
 if [ $# -lt 1 ]
 then
@@ -41,7 +40,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     echo "Checking out version ${KERNEL_VERSION}"
     git checkout ${KERNEL_VERSION}
 
-    echo "Compiling targets... "
+    echo "Compiling Kernel and Other Targets... "
 
     # TODO: Add your kernel build steps here
     # cleanup
@@ -51,16 +50,19 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- defconfig
 
     #make vmlinux
-    make -j4 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- all
+    make -j8 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- all
 
     #make modules
-    #make -j4 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu-modules
+    make -j8 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- modules
 
     #make device tree
-    make -j4 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- dtbs
+    make -j8 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- dtbs
+
+    echo "Compilation Successful!!"
 fi
 
 echo "Adding the Image in outdir"
+sudo cp -r ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}/Image
 
 echo "Creating the staging directory for the root filesystem"
 cd "$OUTDIR"
@@ -72,7 +74,13 @@ fi
 
 # TODO: Create necessary base directories
 
-mkdir -p ${OUTDIR}/rootfs ${OUTDIR}/rootfs/home
+mkdir -p ${OUTDIR}/rootfs
+cd "${OUTDIR}/rootfs"
+mkdir -p bin dev etc home lib lib64 proc sbin sys tmp usr var
+mkdir -p usr/bin usr/lib usr/sbin
+mkdir -p var/log
+mkdir -p home/conf
+
 if [ $? -ne 0 ]; then
 	echo "rootfs directory could not be created"
 	exit 1;
@@ -98,39 +106,52 @@ make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 make CONFIG_PREFIX=${OUTDIR}/rootfs ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} install 
 
 echo "Library dependencies"
-CMD=$(${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter" | awk '{print $NF}')
-CMD1=$(${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library" | awk '{print $NF}')
+CMD=$(${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "program interpreter" | awk '{print $NF}')
+CMD1=$(${CROSS_COMPILE}readelf -a ${OUTDIR}/rootfs/bin/busybox | grep "Shared library" | awk '{print $NF}')
 
 echo "cmd is $CMD"
 echo "cmd1 is $CMD"
 
 # TODO: Add library dependencies to rootfs
-cp $CMD $OUTDIR/rootfs/lib
-cp $CMD1 $OUTDIR/rootfs/lib64
+
+echo "Copying Library dependencies"
+TARGET_DEPEND_PATH=$(${CROSS_COMPILE}gcc --print-sysroot)
+echo "$TARGET_DEPEND_PATH"
+sudo cp ${TARGET_DEPEND_PATH}/lib/ld-linux-aarch64.so.1 ${OUTDIR}/rootfs/lib
+sudo cp ${TARGET_DEPEND_PATH}/lib64/libc.so.6 ${OUTDIR}/rootfs/lib64
+sudo cp ${TARGET_DEPEND_PATH}/lib64/libm.so.6 ${OUTDIR}/rootfs/lib64
+sudo cp ${TARGET_DEPEND_PATH}/lib64/libresolv.so.2 ${OUTDIR}/rootfs/lib64
 
 # TODO: Make device nodes
 
 cd "$OUTDIR/rootfs"
-sudo mknod  -m 666 dev/null 1 2
-sudo mknod  -m 666 dev/console 5 1
+sudo mknod  -m 666 dev/null c 1 3
+sudo mknod  -m 666 dev/console c 5 1
 
 # TODO: Clean and build the writer utility
 
 echo "Cross compiling write utility"
-cd $CURRENT_DIR
+cd ${FINDER_APP_DIR}
 make clean
 make CROSS_COMPILE=aarch64-none-linux-gnu-
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-cp finder.sh conf/assignment.txt conf/username.txt autorun-qemu.sh $OUTDIR/rootfs/home
+TARGET_DIR=${OUTDIR}/rootfs/home
+cp ${FINDER_APP_DIR}/finder.sh $TARGET_DIR
+cp ${FINDER_APP_DIR}/writer $TARGET_DIR
+cp ${FINDER_APP_DIR}/finder-test.sh $TARGET_DIR
+cp -r ${FINDER_APP_DIR}/conf/ $TARGET_DIR
+cp ${FINDER_APP_DIR}/autorun-qemu.sh $TARGET_DIR
+
+echo "Finder utility copied successfully!"
 
 # TODO: Chown the root directory
-sudo chown user:group ${OUTDIR}/rootfs
+sudo chown -R root:root ${OUTDIR}/rootfs
 
 # TODO: Create initramfs.cpio.gz
 
-cd "$OUTDIR/rootfs"
+cd ${OUTDIR}/rootfs
 
 find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
-gzip -f initramfs.cpio
+gzip -f ${OUTDIR}/initramfs.cpio
