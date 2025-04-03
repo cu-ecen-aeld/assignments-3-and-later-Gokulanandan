@@ -53,7 +53,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     make -j8 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- all
 
     #make modules
-    make -j8 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- modules
+    #make -j8 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- modules
 
     #make device tree
     make -j8 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- dtbs
