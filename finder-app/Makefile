@@ -4,7 +4,7 @@ else
 	CC = gcc
 endif
 
-writer:
+writer all:
 	$(CC) -o writer writer.c
 
 clean:
