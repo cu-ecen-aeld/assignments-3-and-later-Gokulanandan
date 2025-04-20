@@ -55,10 +55,10 @@ echo "Removing the old writer utility and compiling as a native application"
 
 for i in $( seq 1 $NUMFILES)
 do
-	./$OUTPUTDIR/writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
+	$OUTPUTDIR/writer "$WRITEDIR/${username}$i.txt" "$WRITESTR"
 done
 
-OUTPUTSTRING=$(./$OUTPUTDIR/finder.sh "$WRITEDIR" "$WRITESTR")
+OUTPUTSTRING=$($OUTPUTDIR/finder.sh "$WRITEDIR" "$WRITESTR")
 
 # remove temporary directories
 rm -rf /tmp/aeld-data
@@ -66,7 +66,7 @@ rm -rf /tmp/aeld-data
 # Copy the o/p of finder command to /tmp/assignment4-result.txt
 OUTPUTFILE=/tmp/assignment4-result.txt
 
-echo $OUTPUTSTRING > 
+echo $OUTPUTSTRING > /tmp/assignment4-result.txt
 set +e
 echo ${OUTPUTSTRING} | grep "${MATCHSTR}"
 if [ $? -eq 0 ]; then
